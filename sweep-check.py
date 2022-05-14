@@ -6,8 +6,9 @@
 
 import matplotlib.pyplot as plt
 from math import sqrt, pi
+import sys
 
-MM = 1e6
+DRONE_FREQ_MHZ = 2443
 
 avg = lambda list: sum(list) / len(list)
 
@@ -30,32 +31,29 @@ dist = lambda power, freq: sqrt((1 / db_to_pr_over_pt(power)) * (C / (4 * pi * f
 freq = 2443 * 1e6
 power = -45
 
-print("Distance({}, {}) = {}".format(power, freq, dist(power,freq)))
 
-freq_bin_to_pows = {}
+def compute_power(filename):
+	freq_bin_to_pows = {}
+	with open(filename) as file:
+		for line in file:
+			tokens = line.split(", ")
+			# timestamp = tokens[0] + ":" + tokens[1]
+			base_freq = float(tokens[2])
+			delta_freq = float(tokens[4])
+			f = base_freq
+			for dbs in list(map((lambda s: float(s)), tokens[6:])):
+				if f not in freq_bin_to_pows:
+					freq_bin_to_pows[f] = []
+				freq_bin_to_pows[f].append(dbs)
+				f += delta_freq
 
-import sys
+	for freq, powers in freq_bin_to_pows.items():
+		if int(freq / 1e6) == DRONE_FREQ_MHZ:
+			return peak_avgs(powers)
 
-with open(sys.argv[1]) as f:
-	for line in f:
-		tokens = line.split(", ")
-		timestamp = tokens[0] + ":" + tokens[1]
-		base_freq = float(tokens[2])
-		delta_freq = float(tokens[4])
-
-		f = base_freq
-
-		for dbs in list(map((lambda s: float(s)), tokens[6:])):
-			if f not in freq_bin_to_pows:
-				freq_bin_to_pows[f] = []
-			freq_bin_to_pows[f].append(dbs)
-			f += delta_freq
-
-for freq, powers in freq_bin_to_pows.items():
-	if  2442 < freq / 1e6 < 2444 and max(powers) > -40:
-		# this is the drone comm freq
-		print("Avg above threshold power at {} = {}" .format( freq / 1e6, peak_avgs(powers) ))
-	# if 2440 * MM < freq < 2445 * MM and max(powers) > -40:
-		plt.plot(powers)
-		plt.title(str(freq / MM) + " MHz")
-		plt.show()
+if __name__ == '__main__':
+	path = sys.argv[1]
+	print("range,power")
+	for ft in range(0, 21):
+		p = compute_power("{}/{}ft.csv".format(path, ft))
+		print("{},{}".format(ft, p))
